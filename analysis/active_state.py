@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
-from src.env import DATA
-from src.postproc.utils import load_elec_file, order_dict
-from analysis.fig1_fig2_and_stats import plot_matrix, multipage
+from src.env import DATA, ATLAS
+
 from analysis.bha import cross_modularity
 
 import os
@@ -9,280 +8,55 @@ from os.path import join as opj
 import numpy as np
 import scipy.io as sio
 from matplotlib import pyplot as plt
+import nibabel as nib
+from nilearn.input_data import NiftiLabelsMasker
 
-RAW_ELEC = opj(DATA, 'raw', 'elec_record')
-PROCESSED_ELEC = opj(DATA, 'processed', 'elec_record')
-
-SUBJECTS = ['sub-001', 'sub-002', 'sub-003', 'sub-004']
-RITHMS = ['prefiltered', 'filtered', 'delta', 'theta',
-          'alpha', 'beta', 'gamma', 'gamma_high']
 
 CWD = os.getcwd()
 
-
-def active_state_to_signal(as_data, real_data):
-    """
-    Takes real data matrix and active state data in Paolo's format.
-    Creates a 0-1 matrix with Paolo's info and filters the real data with it.
-
-    The output is the signal itself, with the non active state points removed
-    """
-
-    num_elec = as_data.shape[1]
-    output_data = np.zeros((30000, num_elec))
-
-    for elec_idx in range(num_elec):
-        for pair in as_data[0][elec_idx]:
-            output_data[pair[0]-1:pair[1], elec_idx] = 1
-
-        output_data[:, elec_idx] = (output_data[:, elec_idx] *
-                                    real_data[:, elec_idx])
-
-    return output_data
+# TR CALC
+#func_img = nib.load('/home/asier/Downloads/final_folder/03_data/01_registered/ag150520a_10_veh_pcp_trm_partA_500_registered.nii.gz')
+#func_img.header.get_zooms()
+# TR = 1
 
 
-def create_active_state_records():
-
-    for sub in SUBJECTS:
-        # create active state folder for sub
-        sub_dir = opj(PROCESSED_ELEC, sub, 'active_state')
-        if not os.path.exists(sub_dir):
-            os.makedirs(sub_dir)
-
-        for rit_num_code, rit in enumerate(RITHMS, 1):
-
-            if rit == 'prefiltered':
-                continue
-            # create rithm folder in sub
-            rithm_dir = opj(sub_dir, rit)
-            if not os.path.exists(rithm_dir):
-                os.makedirs(rithm_dir)
-
-            for chunk in range(1, 13):  # 12 chunks of 1 sec
-
-                # load real data sub/rithm
-                file = opj(PROCESSED_ELEC, sub, 'interictal_not_regressed',
-                           rit, 'interictal_' + str(chunk) + '.npy')
-                real_data = np.load(file)
-
-                # load AS data
-                file = opj(RAW_ELEC, sub, 'interictal',
-                           'interictal_' + str(chunk) + '_fb_' +
-                           str(rit_num_code) + '_numStd_2.mat')
-                as_data = np.array(sio.loadmat(file).get('activeState'))
-
-                as_signal = active_state_to_signal(as_data, real_data)
-
-                output_file = opj(rithm_dir,
-                                  'active_state_' + str(chunk) + '.npy')
-                np.save(output_file, as_signal)
-    return
-
-
-def create_figures_active_state():
-    
-    for sub in SUBJECTS:
-        output_dir_path = opj(CWD, 'reports', 'figures', 'active_state')
-        figures = []
-        
-        elec_file = opj(DATA, 'raw', 'bids', sub, 'electrodes',
-                        'elec.loc')
-        elec_location_mni09 = load_elec_file(elec_file)
-
-        ordered_elec = order_dict(elec_location_mni09)
-
-        elec_tags = list(ordered_elec.keys())
-        
-            
-        for rit in RITHMS:
-            if rit == 'prefiltered':
-                    continue
-            files_path = opj(PROCESSED_ELEC, sub, 'active_state', rit)
-            
-            for num_file, file in enumerate(os.listdir(files_path)):
-                if num_file == 0:
-                    as_data = np.load(opj(files_path, file))
-                    elec_conn_mat = np.corrcoef(as_data.T)
-                else:
-                    as_data = np.load(opj(files_path, file))
-                    elec_conn_mat += np.corrcoef(as_data.T)
-            
-            elec_conn_mat = elec_conn_mat / (num_file+1)
-            
-            plot_matrix(elec_conn_mat, elec_tags)
-            plt.colorbar()
-            ax = plt.title('Active state :' +
-                            ' sub: ' + sub +
-                            ' rithm: ' + rit)
-            fig = ax.get_figure()
-            figures.append(fig)
-            plt.close()
-            
-        multipage(opj(output_dir_path,
-                      'Active state :' +
-                        ' sub: ' + sub +
-                        '.pdf'),
-                      figures,
-                      dpi=250)
-        
-            
-def create_figures_not_active_state():
-    
-    for sub in SUBJECTS:
-        output_dir_path = opj(CWD, 'reports', 'figures', 'active_state')
-        figures = []
-        
-        elec_file = opj(DATA, 'raw', 'bids', sub, 'electrodes',
-                        'elec.loc')
-        elec_location_mni09 = load_elec_file(elec_file)
-
-        ordered_elec = order_dict(elec_location_mni09)
-
-        elec_tags = list(ordered_elec.keys())
-        
-            
-        for rit in RITHMS:
-            if rit == 'prefiltered':
-                    continue
-            files_path = opj(PROCESSED_ELEC, sub, 'interictal_not_regressed', rit)
-            
-            for num_file, file in enumerate(os.listdir(files_path)):
-                if num_file == 0:
-                    if file.endswith('npy'):
-                        as_data = np.load(opj(files_path, file))
-                        elec_conn_mat = np.corrcoef(as_data.T)
-                else:
-                    if file.endswith('npy'):
-                        as_data = np.load(opj(files_path, file))
-                        elec_conn_mat += np.corrcoef(as_data.T)
-            
-            elec_conn_mat = elec_conn_mat / 12
-            
-            plot_matrix(elec_conn_mat, elec_tags)
-            plt.colorbar()
-            ax = plt.title('normal sig :' +
-                            ' sub: ' + sub +
-                            ' rithm: ' + rit)
-            fig = ax.get_figure()
-            figures.append(fig)
-            plt.close()
-        
-        multipage(opj(output_dir_path,
-                      'normal sig :' +
-                        ' sub: ' + sub +
-                        '.pdf'),
-                      figures,
-                      dpi=250)
-
-
-def calc_distance(point1, point2):
-    """
-    calc euclidean distance
-    """
-    point1 = np.array(point1)
-    point2 = np.array(point2)
-    
-    return np.linalg.norm(point1 - point2)
-    
-
-def create_distance_matrices():
-    
-    for sub in SUBJECTS:
-        output_dir_path = opj(CWD, 'reports', 'matrices', sub)
-        if not os.path.exists(output_dir_path):
-            os.makedirs(output_dir_path)
-                              
-        elec_file = opj(DATA, 'raw', 'bids', sub, 'electrodes',
-                        'elec.loc')
-        elec_location_mni09 = load_elec_file(elec_file)
-
-        ordered_elec = order_dict(elec_location_mni09)
-        
-        #get num elec and dist_mat
-        num_elec = len(ordered_elec)
-        dist_mat = np.zeros((num_elec, num_elec))
-        for idx_i, elec_pos1 in enumerate(ordered_elec.values()):
-            for idx_j, elec_pos2 in enumerate(ordered_elec.values()):
-                dist_mat[idx_i, idx_j] = calc_distance(elec_pos1, elec_pos2)
-        
-        # Normalize
-        dist_mat = dist_mat / np.max(dist_mat)
-
-        np.save(opj(output_dir_path, 'DC.npy'),
-                dist_mat)
-    return
-
-
-def corr_mat(X):
-    from scipy import stats
-
-    N=X.shape[1]
-    rho=np.empty((N,N), dtype=float)
-    pval=np.empty((N,N), dtype=float)
-    for i in range(N):
-        v1=X[:,i]
-        for j in range(i,N):
-             v2=X[:,j]
-             C,P=stats.pearsonr(v1,v2)
-             rho[i,j]=C
-             rho[j,i]=C
-             pval[i,j]=P
-             pval[j,i]=P
-    return rho, pval
-
-
-def create_elec_matrices():
-    th = 0.01 # threshold for getting just significant pvalues
-    for sub in SUBJECTS:
-        output_dir_path = opj(CWD, 'reports', 'matrices', sub)
-        if not os.path.exists(output_dir_path):
-            os.makedirs(output_dir_path)
-                          
-        for rit in RITHMS:
-            if rit == 'prefiltered':
-                    continue      
-
-            # Active State
-            # files_path = opj(PROCESSED_ELEC, sub, 'active_state', rit)
-            
-            # Normal
-            files_path = opj(PROCESSED_ELEC, sub, 'interictal_not_regressed', rit)
-
-            
-            for num_file, file in enumerate(os.listdir(files_path)):
-                if num_file == 0:
-                    as_data = np.load(opj(files_path, file))
-                    total_as_data = as_data
-                else:
-                    as_data = np.load(opj(files_path, file))
-                    total_as_data = np.concatenate((total_as_data, as_data))
-                
-            elec_conn_mat, pvals = corr_mat(total_as_data)    
-            elec_conn_mat[np.where(pvals > th)] = 0
-    
-            np.save(opj(output_dir_path, 'EL_'+rit+'.npy'),
-                    elec_conn_mat)
-    return            
-            
-
-def create_FC_SC_matrices():
+def create_FC_matrices():
     from nilearn.connectome import ConnectivityMeasure
-
-    MINIMUM_FIBERS = 10
-
-    sphere = 3
-    denoise_type = 'gsr'
-    ses = 'ses-presurg'
     
-    for sub in SUBJECTS:    
-        output_dir_path = opj(CWD, 'reports', 'matrices', sub)
+    for sub in os.listdir(opj(DATA, '03_data', '01_registered')):   
+        
+        
+        
+        output_dir_path = opj(DATA, 'fc_matrices')
         if not os.path.exists(output_dir_path):
             os.makedirs(output_dir_path)
+            
+            preproc_data = opj(DATA, '03_data', '01_registered', file)
+
+            atlas_path = ATLAS
+
+            # atlas_2514
+            masker = NiftiLabelsMasker(labels_img=atlas_path,
+                                       background_label=0, verbose=5,
+                                       detrend=True, standardize=True,
+                                       t_r=1, # TR should not be a variable
+                                       low_pass=0.1, high_pass=0.01)
+
+            time_series = masker.fit_transform(preproc_data)
+
+
+            # Save time series
+            np.savetxt(opj(base_path, 'time_series_' + atlas + '.txt'),
+                       time_series)
+
+
+
+
+
+
             
         # load function (conn matrix?)
-        func_file = opj(DATA, 'processed', 'fmriprep', sub, ses, 'func',
-                        'time_series_noatlas_' + denoise_type + '_' +
-                        str(sphere) + '.txt')
+        func_file = opj(DATA, 
         func_mat = np.loadtxt(func_file)
 
         correlation_measure = ConnectivityMeasure(kind='correlation')
@@ -294,26 +68,10 @@ def create_FC_SC_matrices():
         fc_mat_neg[np.where(fc_mat>0)] = 0
         fc_mat_pos[np.where(fc_mat<0)] = 0
 
-        # STRUCT MATRIX
-        sc_mat = np.load(opj(DATA, 'raw', 'bids', sub, 'electrodes', ses,
-                             'con_mat_noatlas_' +
-                             str(sphere) + '.npy'))
-        
-        sc_mat_bin = sc_mat.copy()
-        sc_mat_bin[np.where(sc_mat_bin > MINIMUM_FIBERS)] = 1
-        
-        sc_mat = sc_mat / np.max(sc_mat)
 
         np.save(opj(output_dir_path, 'FC.npy'),
                 fc_mat) 
-        np.save(opj(output_dir_path, 'FC_NEG.npy'),
-                fc_mat_neg) 
-        np.save(opj(output_dir_path, 'FC_POS.npy'),
-                fc_mat_pos) 
-        np.save(opj(output_dir_path, 'SC.npy'),
-                sc_mat)             
-        np.save(opj(output_dir_path, 'SC_BIN.npy'),
-                        sc_mat_bin)    
+
          
 def modularity_analysis():
 
@@ -390,53 +148,6 @@ def modularity_analysis():
                     dpi=250)
     
         
-def single_link_analysis():
-
-    from itertools import combinations       
-    
-    MODALITIES = ['SC', 'DC', 'SC_BIN', 'FC', 'FC_POS', 'FC_NEG',
-                  'EL_filtered', 'EL_delta', 'EL_theta', 'EL_alpha', 'EL_beta',
-                  'EL_gamma', 'EL_gamma_high', 
-                  'EL_AS_filtered', 'EL_AS_delta', 'EL_AS_theta', 'EL_AS_alpha',
-                  'EL_AS_beta', 'EL_AS_gamma', 'EL_AS_gamma_high']
-    MOD_IDX = {v: k for k, v in dict(enumerate(MODALITIES)).items()}
-    num_mod = len(MOD_IDX)
-    output_dir = opj(CWD, 'reports', 'figures', 'active_state')
-    
-    result_mat = np.zeros((num_mod, num_mod))
-
-    figures = []
-
-    for sub in SUBJECTS:
-        input_dir_path = opj(CWD, 'reports', 'matrices', sub)
-
-        for source, target in combinations(MODALITIES, 2):
-            
-            arr_1 =  np.load(opj(input_dir_path, source + '.npy')).flatten()
-            arr_2 = np.load(opj(input_dir_path, target + '.npy')).flatten()
-
-            if arr_1 in ['SC', 'SC_BIN']:
-                idx = np.where(arr_1==0)
-                arr_1 = np.delete(arr_1, idx)
-                arr_2 = np.delete(arr_2, idx)
-            
-            result_mat[MOD_IDX[source],MOD_IDX[target]] = np.corrcoef(arr_1, arr_2)[0][1]
-        
-        plot_matrix(result_mat.T, MODALITIES)
-        plt.clim(-1,1)
-        plt.colorbar(orientation="horizontal")
-        ax = plt.title('Single_link_' + sub )
-        fig = ax.get_figure()
-        figures.append(fig)
-        plt.close()
-
-    multipage(opj(output_dir,
-                  'Single_link.pdf'),
-                    figures,
-                    dpi=250)                 
-                    
-                    
-                    
                     
                     
                     
