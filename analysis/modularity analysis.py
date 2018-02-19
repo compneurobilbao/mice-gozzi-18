@@ -41,7 +41,7 @@ def modularity_analysis():
     ALPHA = 0.45
     BETA = 0.0
     MAX_CLUSTERS = 50
-    output_dir = opj(DATA, 'reports')
+    output_dir = opj(CWD, 'reports')
 
     figures = []
     source_network = np.load(opj(DATA, 'SC_connectome.npy'))
@@ -67,7 +67,7 @@ def modularity_analysis():
     plt.plot(result)
     plt.xlabel('# clusters')
     plt.ylabel('modularity value')
-    plt.ylim((0, 0.8))
+    plt.ylim((0, 0.2))
     ax = plt.title('Modularity_sc_2_fc')
     fig = ax.get_figure()
     figures.append(fig)
