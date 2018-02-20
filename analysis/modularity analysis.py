@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from src.env import DATA
-from analysis.fig1_fig2_and_stats import multipage  # ,plot_matrix
+from analysis.fig1_fig2_and_stats import multipage, plot_matrix
 from analysis.bha import cross_modularity
 
 import os
@@ -45,7 +45,9 @@ def modularity_analysis():
 
     figures = []
     source_network = np.load(opj(DATA, 'SC_connectome.npy'))
+    #source_network[np.where(source_network>0)] = 1
     target_network = np.load(opj(DATA, 'FC_mean_all_subject.npy'))
+    target_network = np.abs(target_network)
 
     result = np.zeros(MAX_CLUSTERS)
     for num_clusters in range(2, MAX_CLUSTERS):
@@ -77,3 +79,46 @@ def modularity_analysis():
                   'xmod_sc_2_fmri.pdf'),
               figures,
               dpi=250)
+
+
+def plotting_clusters():
+
+    BEST_XMOD = 8
+    ALPHA = 0.45
+    BETA = 0.0
+    output_dir = opj(CWD, 'reports')
+
+    source_network = np.load(opj(DATA, 'SC_connectome.npy'))
+    target_network = np.load(opj(DATA, 'FC_mean_all_subject.npy'))
+    target_network = np.abs(target_network)
+
+    """
+    Source dendogram -> target follows source
+    """
+    Y = spatial.distance.pdist(source_network, metric='cosine')
+    Y = np.nan_to_num(Y)
+    Z = cluster.hierarchy.linkage(Y, method='weighted')
+    T = cluster.hierarchy.cut_tree(Z, n_clusters=BEST_XMOD)
+
+    Xsf, Qff, Qsf, Lsf = cross_modularity(target_network,
+                                          source_network,
+                                              ALPHA,
+                                              BETA,
+                                              T[:, 0])
+    
+    sort_idx = np.argsort(np.squeeze(T))
+    reorder_source = source_network[sort_idx,:]
+    plot_matrix(reorder_source, arange(255))
+    
+    reorder_target = target_network[sort_idx,:]
+    plot_matrix(reorder_target, arange(255))
+    
+    plot_matrix(source_network, arange(255))
+    
+    
+    
+    
+    
+    
+    
+    
