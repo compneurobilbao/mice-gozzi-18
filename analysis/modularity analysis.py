@@ -116,8 +116,11 @@ def plotting_clusters():
     plot_matrix(source_network, arange(255))
     
     
-    
-    
+def export_mat():    
+    import scipy
+    filename = '/home/asier/Desktop/sc_mice.mat'
+
+    scipy.io.savemat(filename, {'sc_mice': source_network})    
     
     
     
